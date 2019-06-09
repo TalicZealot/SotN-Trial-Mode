@@ -10,6 +10,7 @@ Releasing this early to test out how it behaves for others and if any major issu
 
 ## Setup
 * Download repository from *Clone or download* > *Download ZIP*
+* In Bizhawk set Config > Customize > Advanced > Lua Core > Lua+LuaInterface
 * Launch the script after running the game through Tools > Lua Console > Script > Open Script
 * Highly recommended to use Pixel Pro Mode for rendering. In Bizhawk PSX > Options > Pixel Pro Mode
 * This is how it should look like:
