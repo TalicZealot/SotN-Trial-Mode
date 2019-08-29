@@ -9,14 +9,15 @@ require "Utilities/UserInterface"
 
 local settings = {consistencyTraining = false, autoContinue = true, renderPixelPro = true}
 local saveData = {
-    alucardTrialAutodash = 0,
+    alucardTrialRichterSkip = 0,
     alucardTrialFrontslide = 0,
+    alucardTrialAutodash = 0,
     alucardTrialFloorClip = 0,
     alucardChallengeShieldDashSpeed = 0,
     alucardChallengeForceOfEchoTimeTrial = 0,
     richterTrialSlidingAirslash = 0,
     richterTrialVaultingAirslash = 0,
-    richterTrialMinotaurRoom = 0,
+    richterTrialOtgAirslash = 0,
     richterChallengeMinotaurRoomTimeTrial = 0
 }
 deserializeToObject(settings, "config.ini")
@@ -35,12 +36,14 @@ local constants = {
     drawingOffsetX = 150,
     drawingOffsetY = 40,
     savestates = {
-        "states/AlucardAutodash.State",
+        "states/AlucardRichterSkip.State",
         "states/AlucardFrontslide.State",
+        "states/AlucardAutodash.State",
         "states/AlucardAutodash.State",
         "states/AlucardShieldDahSpeed.State",
         "states/AlucardForceOfEchoTimeTrial.State",
         "states/RichterSlidingAirslash.State",
+        "states/RichterVaultingAirslash.State",
         "states/RichterVaultingAirslash.State",
         "states/RichterMinotaur.State"
     },
@@ -51,18 +54,21 @@ local constants = {
         forceOfEcho = 0x097967,
         currentRoom = 0x1375BC,
         alchLabCandle = 0x077794,
+        mapOpen = 0x0974A4,
         roomForceOfEchoValue = 20,
         roomMinotaurValue = 124,
         roomMinotaurEscapedValue = 100
     },
     trialNames = {
-        "alucardTrialAutodash",
+        "alucardTrialRichterSkip",
         "alucardTrialFrontslide",
+        "alucardTrialAutodash",
         "alucardTrialFloorClip",
         "alucardChallengeShieldDashSpeed",
         "alucardChallengeForceOfEchoTimeTrial",
         "richterTrialSlidingAirslash",
         "richterTrialVaultingAirslash",
+        "richterTrialOtgAirslash",
         "richterChallengeMinotaurRoomTimeTrial"
     },
     buttonImages = {
@@ -103,13 +109,15 @@ local guiForm = {
     interfaceCheckboxConsistency = nil,
     interfaceCheckboxContinue = nil,
     interfaceCheckboxRendering = nil,
-    alucardTrialAutodashButton = nil,
+    alucardTrialRichterSkipButton = nil,
     alucardTrialFrontslideButton = nil,
+    alucardTrialAutodashButton = nil,
     alucardTrialFloorClipButton = nil,
     alucardChallengeShieldDashSpeedButton = nil,
     alucardChallengeForceOfEchoTimeTrialButton = nil,
     richterTrialSlidingAirslashButton = nil,
     richterTrialVaultingAirslashButton = nil,
+    richterTrialOtgAirslashButton = nil,
     richterChallengeMinotaurRoomTimeTrialButton = nil
 }
 initForm(commonVariables, saveData, guiForm, settings)
@@ -251,7 +259,7 @@ local function verifyInputs(localTrialData, inputs)
                 localTrialData.mistakeMessage =
                     "Pressed " ..
                         localTrialData.moves[localTrialData.currentMove].description .. " "  .. localTrialData.moves[localTrialData.currentMove].minimumGap - localTrialData.frameCounter ..
-                        " frames too soon!"
+                        " frames too early!"
                     return
             else
                 inputCondition = inputCondition or inputs[localTrialData.moves[localTrialData.currentMove].buttonsOr[i]]
@@ -276,7 +284,7 @@ local function verifyInputs(localTrialData, inputs)
                 localTrialData.mistakeMessage =
                     "Pressed " ..
                         localTrialData.moves[localTrialData.currentMove].description .. " "  .. localTrialData.moves[localTrialData.currentMove].minimumGap - localTrialData.frameCounter ..
-                        " frames too soon!"
+                        " frames too early!"
                     return
             else
                 inputCondition = inputCondition and inputs[localTrialData.moves[localTrialData.currentMove]
@@ -298,7 +306,7 @@ local function verifyInputs(localTrialData, inputs)
                 localTrialData.mistakeMessage =
                     "Released " ..
                     localTrialData.moves[localTrialData.currentMove].buttonsHold[i] .. localTrialData.moves[localTrialData.currentMove].holdDuration - localTrialData.frameCounter ..
-                        " frames too soon!"
+                        " frames too early!"
                     return
             elseif localTrialData.moves[localTrialData.currentMove].holdDuration ~= nil and inputs[localTrialData.moves[localTrialData.currentMove].buttonsHold[i]] and
                 localTrialData.frameCounter < localTrialData.moves[localTrialData.currentMove].holdDuration then
@@ -328,7 +336,7 @@ local function verifyInputs(localTrialData, inputs)
                 localTrialData.mistakeMessage =
                     "Released " ..
                         localTrialData.moves[localTrialData.currentMove].buttonsUp[i] ..
-                        " too soon!"
+                        " too early!"
                     return
             elseif inputs[localTrialData.moves[localTrialData.currentMove].buttonsUp[i]] then
                 inputCondition = false
@@ -419,22 +427,53 @@ local function trialCommon(localTrialData, inputs)
     if settings.renderPixelPro == false then
         scaling = 0.75
     end
-    gui.drawText(constants.drawspace.centerX, constants.drawspace.height - (15 * scaling), "L2 + R2 to restart                  L2 + R1 to play demo", 0xFFFFFFFF, 0x00000000, (14 * scaling), "Arial", "bold", "center")
+    gui.drawText(constants.drawspace.centerX, constants.drawspace.height - (15 * scaling), "L2 + Up to restart                  L2 + Down to play demo", 0xFFFFFFFF, 0x00000000, (14 * scaling), "Arial", "bold", "center")
 
-    if localTrialData.counterOn and emu.islagged() == false then
+    ---------------------------
+    --pause buffering support--
+    local map = memory.readbyte(constants.memoryData.mapOpen)
+
+    if map == 1 and localTrialData.mapOpen ~= true and (localTrialData.mapClosed == nil or localTrialData.mapClosed > 2) then
+      localTrialData.frameCounter = localTrialData.frameCounter + 2
+    elseif map == 1 and localTrialData.mapOpen ~= true and localTrialData.mapClosed < 3 then
         localTrialData.frameCounter = localTrialData.frameCounter + 1
     end
+
+    if map == 0 and localTrialData.mapOpen == true then
+      localTrialData.frameCounter = localTrialData.frameCounter - 1
+    end
+
+    if map == 1 and localTrialData.mapOpen ~= true then 
+        localTrialData.mapOpen = true
+    elseif map == 0 and localTrialData.mapOpen == true then 
+        localTrialData.mapOpen = false
+        localTrialData.mapClosed = 0
+    elseif map == 0 and localTrialData.mapOpen == false and localTrialData.mapClosed < 3 then 
+        localTrialData.mapClosed = localTrialData.mapClosed + 1
+    elseif map == 0 and localTrialData.mapOpen == false and localTrialData.mapClosed > 2 then 
+        localTrialData.mapClosed = 0
+    end
+    ---------------------------
+
+    if localTrialData.counterOn and emu.islagged() == false and localTrialData.mapOpen ~= true then
+        localTrialData.frameCounter = localTrialData.frameCounter + 1
+    end
+
+    --if localTrialData.frameCounter % 133 == 0 then
+    --    console.clear()
+    --end
+    --print(localTrialData.frameCounter)
 
     if localTrialData.demoOn and localTrialData.failedState == false and localTrialData.successState == false then
         runDemo(localTrialData)
         inputs = joypad.get() --update inputs so that they get verified properly
     end
 
-    if inputs["P1 R2"] and inputs["P1 L2"] and localTrialData.resetState ~= true and (emu.framecount() - commonVariables.lastResetFrame) > 60 then
+    if inputs["P1 L2"] and inputs["P1 Up"] and localTrialData.resetState ~= true and (emu.framecount() - commonVariables.lastResetFrame) > 60 then
         localTrialData.resetState = true
     end
 
-    if inputs["P1 R1"] and inputs["P1 L2"] and localTrialData.demoOn ~= true and (emu.framecount() - commonVariables.lastResetFrame) > 60 then
+    if inputs["P1 L2"] and inputs["P1 Down"] and localTrialData.demoOn ~= true and (emu.framecount() - commonVariables.lastResetFrame) > 60 then
         localTrialData.moves = nil
         localTrialData.demoOn = true
         return
@@ -466,10 +505,11 @@ local function trialCommon(localTrialData, inputs)
         end
     end
 end
+
 -------------------
 --Trial Functions--
 ------Alucard------
-local function alucardTrialAutodash(passedTrialData)
+local function alucardTrialRichterSkip(passedTrialData)
     local localTrialData = passedTrialData
     --initialize trial data on start or restart
     if localTrialData.moves == nil then
@@ -488,45 +528,157 @@ local function alucardTrialAutodash(passedTrialData)
             moves = {
                 {text = "Autodash:", completed = true}, {
                     images = {constants.buttonImages.left},
-                    text = "(hold)",
-                    description = "Left(hold)",
+                    description = "Left",
                     completed = false,
                     buttons = {"P1 Left"},
-                    counter = false
-                }, {
-                    images = {constants.buttonImages.l1},
-                    text = "(hold)",
-                    description = "Mist",
-                    completed = false,
-                    buttons = {"P1 L1", "P1 Left"},
-                    buttonsHold = {"P1 Left"},
                     failButtons = {
                         {
+                            button = "P1 Right",
+                            failMessage = "Out of position!"
+                        },
+                        {
                             button = "P1 R2",
-                            failMessage = "Transformed to Wolf too soon!"
+                            failMessage = "Must be in wolf form!"
                         },
                         {
                             button = "P1 R1",
-                            failMessage = "Transformed to Bat!"
-                        }
+                            failMessage = "Must be in wolf form!"
+                        },
+                        {
+                            button = "P1 Cross",
+                            failMessage = "Jumped too early!"
+                        },
                     },
                     counter = true
-                }, {
-                    images = {constants.buttonImages.r2},
-                    text = "5-6 frame gap",
-                    description = "wolf(after 5 or 6 frames)",
+                },
+                {
+                    skipDrawing = true,
+                    description = "hold Left",
+                    text = nil,
                     completed = false,
-                    buttons = {"P1 R2"},
-                    buttonsHold = {"P1 Left", "P1 L1"},
+                    buttons = {"P1 Left"},
                     failButtons = {
                         {
+                            button = "P1 Right",
+                            failMessage = "Out of position!"
+                        },
+                        {
+                            button = "P1 R2",
+                            failMessage = "Must be in wolf form!"
+                        },
+                        {
                             button = "P1 R1",
-                            failMessage = "Transformed to Bat!"
+                            failMessage = "Must be in wolf form!"
+                        },
+                        {
+                            button = "P1 Cross",
+                            failMessage = "Jumped too early!"
+                        },
+                    },
+                    counter = true
+                },
+                {
+                    skipDrawing = true,
+                    description = "hold Left",
+                    text = nil,
+                    completed = false,
+                    buttons = {"P1 Left"},
+                    failButtons = {
+                        {
+                            button = "P1 Right",
+                            failMessage = "Out of position!"
+                        },
+                        {
+                            button = "P1 R2",
+                            failMessage = "Must be in wolf form!"
+                        },
+                        {
+                            button = "P1 R1",
+                            failMessage = "Must be in wolf form!"
+                        },
+                        {
+                            button = "P1 Cross",
+                            failMessage = "Jumped too early!"
+                        },
+                    },
+                    counter = true
+                },
+                {
+                    skipDrawing = true,
+                    description = "Let go of Left",
+                    text = nil,
+                    completed = false,
+                    buttonsUp = {"P1 Left"},
+                    failButtons = {
+                        {
+                            button = "P1 Right",
+                            failMessage = "Out of position!"
+                        },
+                        {
+                            button = "P1 R2",
+                            failMessage = "Must be in wolf form!"
+                        },
+                        {
+                            button = "P1 R1",
+                            failMessage = "Must be in wolf form!"
+                        },
+                        {
+                            button = "P1 Cross",
+                            failMessage = "Jumped too early!"
+                        },
+                    },
+                    counter = true,
+                    frameWindow = 7
+                },
+                 {
+                    images = {constants.buttonImages.left},
+                    text = "(hold)",
+                    description = "Dash",
+                    completed = false,
+                    buttons = {"P1 Left"},
+                    failButtons = {
+                        {
+                            button = "P1 R2",
+                            failMessage = "Must be in wolf form!"
+                        },
+                        {
+                            button = "P1 Cross",
+                            failMessage = "Jumped 1 frame too early!"
+                        },
+                        {
+                            button = "P1 Right",
+                            failMessage = "Out of position!"
+                        },
+                        {
+                            button = "P1 R1",
+                            failMessage = "Must be in wolf form!"
                         }
                     },
                     counter = true,
-                    frameWindow = 7,
-                    minimumGap = 6
+                    frameWindow = 10
+                }, {
+                    images = {constants.buttonImages.cross},
+                    description = "jump",
+                    completed = false,
+                    buttons = {"P1 Cross"},
+                    buttonsHold = {"P1 Left"},
+                    failButtons = {
+                            {
+                                button = "P1 Right",
+                                failMessage = "Out of position!"
+                            },
+                            {
+                                button = "P1 R1",
+                                failMessage = "Must be in wolf form!"
+                            },
+                            {
+                                button = "P1 R2",
+                                failMessage = "Must be in wolf form!"
+                            }
+                    },
+                    counter = true,
+                    frameWindow = 1,
+                    minimumGap = 1
                 }, {
                     images = {constants.buttonImages.left},
                     text = "(hold)",
@@ -534,7 +686,7 @@ local function alucardTrialAutodash(passedTrialData)
                     completed = false,
                     buttonsHold = {"P1 Left"},
                     counter = true,
-                    holdDuration = 70
+                    holdDuration = 30
                 }
             }
         }
@@ -691,6 +843,125 @@ local function alucardTrialFrontslide(passedTrialData)
     return localTrialData
 end
 
+local function alucardTrialAutodash(passedTrialData)
+    local localTrialData = passedTrialData
+    --initialize trial data on start or restart
+    if localTrialData.moves == nil then
+        savestate.load(constants.savestates[commonVariables.currentTrial])
+        commonVariables.lastResetFrame = emu.framecount()
+        localTrialData = {
+            demoOn = passedTrialData.demoOn,
+            frameCounter = 0,
+            counterOn = false,
+            failedState = false,
+            successState = false,
+            resetState = false,
+            mistakeMessage = "",
+            currentMove = 2,
+            --table of the trial steps called moves, with condition check properties like buttons to be pressed, held down, etc.
+            moves = {
+                {text = "Autodash:", completed = true}, {
+                    images = {constants.buttonImages.left},
+                    text = "(hold)",
+                    description = "Left(hold)",
+                    completed = false,
+                    buttons = {"P1 Left"},
+                    failButtons = {
+                        {
+                            button = "P1 Right",
+                            failMessage = "Must be next to ledge!"
+                        }
+                    },
+                    counter = false
+                }, {
+                    images = {constants.buttonImages.l1},
+                    description = "Mist",
+                    completed = false,
+                    buttons = {"P1 L1", "P1 Left"},
+                    buttonsHold = {"P1 Left"},
+                    failButtons = {
+                        {
+                            button = "P1 Right",
+                            failMessage = "Must be next to ledge!"
+                        },
+                        {
+                            button = "P1 Right",
+                            failMessage = "Must be next to ledge!"
+                        },
+                        {
+                            button = "P1 R2",
+                            failMessage = "Transformed to Wolf too early!"
+                        },
+                        {
+                            button = "P1 R1",
+                            failMessage = "Transformed to Bat!"
+                        }
+                    },
+                    counter = true
+                }, {
+                    images = {constants.buttonImages.r2},
+                    text = "5-6 frame gap",
+                    description = "wolf(after 5 or 6 frames)",
+                    completed = false,
+                    buttons = {"P1 R2"},
+                    buttonsHold = {"P1 Left"},
+                    failButtons = {
+                        {
+                            button = "P1 R1",
+                            failMessage = "Transformed to Bat!"
+                        },
+                        {
+                            button = "P1 Right",
+                            failMessage = "Must be next to ledge!"
+                        },
+                    },
+                    counter = true,
+                    frameWindow = 7,
+                    minimumGap = 6
+                }, {
+                    images = {constants.buttonImages.left},
+                    text = "(hold)",
+                    description = "left(hold)",
+                    completed = false,
+                    buttonsHold = {"P1 Left"},
+                    counter = true,
+                    holdDuration = 70
+                }
+            }
+        }
+    end
+    --run common trial functionality including standard input checks
+    local inputs = joypad.get()
+    trialCommon(localTrialData, inputs)
+    if localTrialData.moves == nil then
+        return localTrialData
+    end
+
+    --special case checks would go here
+
+    --returning an empty table restarts the trial
+    if localTrialData.failedState and localTrialData.frameCounter > 160 then
+        return {}
+    end
+
+    if localTrialData.successState and localTrialData.frameCounter > 160 then
+        if settings.autoContinue and settings.consistencyTraining == false and localTrialData.demoOn ~= true then
+            commonVariables.currentTrial = commonVariables.currentTrial + 1
+        elseif settings.autoContinue and settings.consistencyTraining and localTrialData.demoOn ~= true and
+            commonVariables.currentSuccesses > 9 then
+            commonVariables.currentTrial = commonVariables.currentTrial + 1
+        end
+        return {}
+    end
+
+    if localTrialData.resetState then
+        return {}
+    end
+
+    trialMoveDisplay(localTrialData.moves, localTrialData.currentMove)
+    return localTrialData
+end
+
 local function alucardTrialFloorClip(passedTrialData)
     local localTrialData = passedTrialData
     if localTrialData.moves == nil then
@@ -714,6 +985,12 @@ local function alucardTrialFloorClip(passedTrialData)
                     description = "Left(hold)",
                     completed = false,
                     buttons = {"P1 Left"},
+                    failButtons = {
+                        {
+                            button = "P1 Right",
+                            failMessage = "Must be next to ledge!"
+                        }
+                    },
                     counter = false
                 }, {
                     images = {constants.buttonImages.l1},
@@ -725,7 +1002,11 @@ local function alucardTrialFloorClip(passedTrialData)
                     failButtons = {
                         {
                             button = "P1 R2",
-                            failMessage = "Transformed to Wolf too soon!"
+                            failMessage = "Transformed to Wolf too early!"
+                        },
+                        {
+                            button = "P1 Right",
+                            failMessage = "Must be next to ledge!"
                         },
                         {
                             button = "P1 R1",
@@ -744,11 +1025,15 @@ local function alucardTrialFloorClip(passedTrialData)
                         {
                             button = "P1 R1",
                             failMessage = "Transformed to Bat!"
+                        },
+                        {
+                            button = "P1 Right",
+                            failMessage = "Must be next to ledge!"
                         }
                     },
                     counter = true,
                     frameWindow = 7,
-                    minimumGap = 6
+                    minimumGap = 6 -- correctly executed first frame autodash showing up as 1 frame too early wolf press
                 }, {
                     images = {constants.buttonImages.cross},
                     description = "jump",
@@ -850,7 +1135,7 @@ local function alucardChallengeShieldDashSpeed(passedTrialData)
             failedState = false,
             successState = false,
             moves = {
-                {text = "Maintain average speed for 30s:", completed = true}, {
+                {text = "Maintain average speed for 20s:", completed = true}, {
                     text = "2.7+",
                     completed = false
                 }, {
@@ -930,11 +1215,11 @@ local function alucardChallengeShieldDashSpeed(passedTrialData)
         customMessageDisplay(1, string.format("%0.3f", localTrialData.milliseconds))
     end
 
-    if localTrialData.seconds > 29 and localTrialData.moves[2].completed == false then
+    if localTrialData.seconds > 19 and localTrialData.moves[2].completed == false then
         localTrialData.moves[2].completed = true
         localTrialData.seconds = 0
         localTrialData.milliseconds = 0
-    elseif localTrialData.seconds > 29 and localTrialData.moves[2].completed then
+    elseif localTrialData.seconds > 19 and localTrialData.moves[2].completed then
         localTrialData.moves[3].completed = true
         localTrialData.seconds = 0
         localTrialData.milliseconds = 0
@@ -1025,7 +1310,7 @@ local function alucardChallengeForceOfEchoTimeTrial(passedTrialData)
         localTrialData.frameCounter = 0
     end
 
-    if inputs["P1 R2"] and inputs["P1 L2"] and (emu.framecount() - commonVariables.lastResetFrame) > 60 then
+    if inputs["P1 L2"] and inputs["P1 Up"] and (emu.framecount() - commonVariables.lastResetFrame) > 60 then
         return {}
     end
 
@@ -1082,15 +1367,22 @@ local function richterTrialSlidingAirslash(passedTrialData)
                     failButtons = {
                         {
                             button = "P1 Cross",
-                            failMessage = "Pressed jump too soon!"
+                            failMessage = "Pressed jump too early!"
+                        },
+                        {
+                            button = "P1 Left",
+                            failMessage = "Out of possition!"
+                        },
+                        {
+                            button = "P1 Right",
+                            failMessage = "Out of possition!"
                         },
                         {
                             button = "P1 Square",
-                            failMessage = "Pressed attack too soon!"
+                            failMessage = "Pressed attack too early!"
                         }
                     },
-                    counter = true,
-                    frameWindow = 99
+                    counter = true
                 }, {
                     images = {constants.buttonImages.down},
                     description = "down",
@@ -1099,11 +1391,11 @@ local function richterTrialSlidingAirslash(passedTrialData)
                     failButtons = {
                         {
                             button = "P1 Cross",
-                            failMessage = "Pressed jump too soon!"
+                            failMessage = "Pressed jump too early!"
                         },
                         {
                             button = "P1 Square",
-                            failMessage = "Pressed attack too soon!"
+                            failMessage = "Pressed attack too early!"
                         }
                     },
                     counter = true,
@@ -1117,7 +1409,7 @@ local function richterTrialSlidingAirslash(passedTrialData)
                     failButtons = {
                         {
                             button = "P1 Square",
-                            failMessage = "Pressed attack too soon!"
+                            failMessage = "Pressed attack too early!"
                         }
                     },
                     counter = true,
@@ -1131,7 +1423,7 @@ local function richterTrialSlidingAirslash(passedTrialData)
                     failButtons = {
                         {
                             button = "P1 Square",
-                            failMessage = "Pressed attack too soon!"
+                            failMessage = "Pressed attack too early!"
                         }
                     },
                     counter = true,
@@ -1207,6 +1499,14 @@ local function richterTrialVaultingAirslash(passedTrialData)
                         {
                             button = "P1 Square",
                             failMessage = "Pressed attack!"
+                        },
+                        {
+                            button = "P1 Left",
+                            failMessage = "Out of possition!"
+                        },
+                        {
+                            button = "P1 Right",
+                            failMessage = "Out of possition!"
                         }
                     },
                     counter = true
@@ -1328,6 +1628,131 @@ local function richterTrialVaultingAirslash(passedTrialData)
     return localTrialData
 end
 
+local function richterTrialOtgAirslash(passedTrialData)
+    local localTrialData = passedTrialData
+    if localTrialData.moves == nil then
+        savestate.load(constants.savestates[commonVariables.currentTrial])
+        commonVariables.lastResetFrame = emu.framecount()
+        localTrialData = {
+            demoOn = passedTrialData.demoOn,
+            frameCounter = 0,
+            counterOn = false,
+            failedState = false,
+            successState = false,
+            resetState = false,
+            mistakeMessage = "",
+            currentMove = 2,
+            moves = {
+                {text = "OTG Airslash:", completed = true}, {
+                    images = {constants.buttonImages.up},
+                    description = "up",
+                    completed = false,
+                    buttons = {"P1 Up"},
+                    failButtons = {
+                        {
+                            button = "P1 Cross",
+                            failMessage = "Pressed jump too early!"
+                        },
+                        {
+                            button = "P1 Square",
+                            failMessage = "Pressed attack too early!"
+                        }
+                    },
+                    counter = true
+                }, {
+                    images = {constants.buttonImages.down},
+                    description = "down",
+                    completed = false,
+                    buttons = {"P1 Down"},
+                    failButtons = {
+                        {
+                            button = "P1 Cross",
+                            failMessage = "Pressed jump too early!"
+                        },
+                        {
+                            button = "P1 Square",
+                            failMessage = "Pressed attack too early!"
+                        }
+                    },
+                    counter = true,
+                    frameWindow = 20
+                }, {
+                    images = {constants.buttonImages.downleft, constants.buttonImages.downright},
+                    separators = {"or"},
+                    description = "downforward",
+                    completed = false,
+                    buttons = {"P1 Down"},
+                    buttonsOr = {"P1 Left", "P1 Right"},
+                    failButtons = {
+                        {
+                            button = "P1 Square",
+                            failMessage = "Pressed attack too early!"
+                        }
+                    },
+                    counter = true,
+                    frameWindow = 20
+                }, {
+                    images = {constants.buttonImages.cross},
+                    text = "neutral",
+                    description = "neutral jump",
+                    completed = false,
+                    buttons = {"P1 Cross"},
+                    failButtons = {
+                        {
+                            button = "P1 Square",
+                            failMessage = "Pressed attack too early!"
+                        }
+                    },
+                    counter = true,
+                    frameWindow = 20
+                }, {
+                    images = {constants.buttonImages.square},
+                    description = "attack",
+                    completed = false,
+                    buttons = {"P1 Square"},
+                    failButtons = {
+                        {button = "P1 Right", failMessage = "Pressed right!"}
+                    },
+                    counter = true,
+                    frameWindow = 20
+                }
+            }
+        }
+    end
+    local inputs = joypad.get()
+
+    if localTrialData.currentMove == 5 and inputs["P1 Cross"] and inputs["P1 Down"] then
+        localTrialData.failedState = true
+        localTrialData.mistakeMessage = "Was still holding down while jumping!"
+    end
+
+    trialCommon(localTrialData, inputs)
+    if localTrialData.moves == nil then
+        return localTrialData
+    end
+
+    if localTrialData.failedState and localTrialData.frameCounter > 160 then
+        return {}
+    end
+
+    if localTrialData.successState and localTrialData.frameCounter > 160 then
+        if settings.autoContinue and settings.consistencyTraining == false and localTrialData.demoOn ~= true then
+            commonVariables.currentTrial = commonVariables.currentTrial + 1
+        elseif settings.autoContinue and settings.consistencyTraining and
+            commonVariables.currentSuccesses > 9 and localTrialData.demoOn ~= true then
+            commonVariables.currentTrial = commonVariables.currentTrial + 1
+        end
+        return {}
+    end
+
+    if localTrialData.resetState then
+        return {}
+    end
+
+    trialMoveDisplay(localTrialData.moves, localTrialData.currentMove)
+    return localTrialData
+end
+
 local function richterChallengeMinotaurRoomTimeTrial(passedTrialData)
     local localTrialData = passedTrialData
     if localTrialData.moves == nil then
@@ -1419,6 +1844,15 @@ end
 ---------------
 ---Main Loop---
 ---------------
+--close form on script exit
+event.onexit(
+    function ()
+         forms.destroy(guiForm.mainForm)
+         --update ini file settings and save data
+         weiteToIni(serializeObject(settings, "settings") .. serializeObject(saveData, "saveData"), "config.ini")
+    end
+)
+
 while true do
     --end script when the form is closed
     if forms.gettext(guiForm.mainForm) == "" then
@@ -1430,14 +1864,16 @@ while true do
     updateSettings(settings, guiForm.interfaceCheckboxConsistency, guiForm.interfaceCheckboxContinue, guiForm.interfaceCheckboxRendering)
 
     local trialToRun = {
-        [1] = function(x) return alucardTrialAutodash(x) end,
+        [1] = function(x) return alucardTrialRichterSkip(x) end,
         [2] = function(x) return alucardTrialFrontslide(x) end,
-        [3] = function(x) return alucardTrialFloorClip(x) end,
-        [4] = function(x) return alucardChallengeShieldDashSpeed(x) end,
-        [5] = function(x) return alucardChallengeForceOfEchoTimeTrial(x) end,
-        [6] = function(x) return richterTrialSlidingAirslash(x) end,
-        [7] = function(x) return richterTrialVaultingAirslash(x) end,
-        [8] = function(x) return richterChallengeMinotaurRoomTimeTrial(x) end
+        [3] = function(x) return alucardTrialAutodash(x) end,
+        [4] = function(x) return alucardTrialFloorClip(x) end,
+        [5] = function(x) return alucardChallengeShieldDashSpeed(x) end,
+        [6] = function(x) return alucardChallengeForceOfEchoTimeTrial(x) end,
+        [7] = function(x) return richterTrialSlidingAirslash(x) end,
+        [8] = function(x) return richterTrialVaultingAirslash(x) end,
+        [9] = function(x) return richterTrialOtgAirslash(x) end,
+        [10] = function(x) return richterChallengeMinotaurRoomTimeTrial(x) end
     }
     if commonVariables.currentTrial > #trialToRun then
         commonVariables.currentTrial = commonVariables.currentTrial - 1
